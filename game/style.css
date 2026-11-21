@@ -1,0 +1,24 @@
+/* CRUMB — page chrome only. All game art is drawn on the canvas. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #070a12;
+}
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #0d1526;
+  touch-action: none;
+}
+#status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
