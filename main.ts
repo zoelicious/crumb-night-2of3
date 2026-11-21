@@ -1,41 +1,74 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// CRUMB — handoff script for the night-kitchen stealth entry (best-stealth 2/3, agent 4).
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// What this file does, in plain terms: it takes the finished playable folder
+// (game/) and the four cover shots (screenshots/) that sit next to this file,
+// places copies of both inside the grader's output folder, and then asks the
+// vendored make.fun helper to write the dossier.json summary the judge reads.
+// The game itself lives in game/ and is untouched by this script; this file
+// only moves files around and calls the dossier builder. Run it like:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// When MAKEFUN_OUTPUT_DIR is not set, the grader's default folder is used.
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-game.ts';
+import { cpSync as copyTree, existsSync as pathExists, mkdirSync as makeDir, writeFileSync as writeText } from 'node:fs';
+import { join as joinPath } from 'node:path';
+import { fileURLToPath as urlToPath } from 'node:url';
+import { buildDossier as makeDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+// Fallback destination when the grader does not hand us one.
+const DEFAULT_OUTPUT = '/output';
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Scorer limits, kept exactly as the kit's gate expects them.
+const TEXT_BUDGET = 163840;
+const SHOT_LIMIT = 4;
+const SHOT_BUDGET = 262144;
+const GAME_FILE_LIMIT = 993;
+const GAME_BYTE_LIMIT = 50331648;
+const GAME_PATH_LIMIT = 1000;
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+// Folder holding this script, resolved from its own URL so the script
+// works no matter which directory it is launched from.
+function repoRoot(): string {
+  return urlToPath(new URL('.', import.meta.url));
+}
+
+// The grader tells us where to deliver through the environment; use the
+// value exactly as given, and only fall back when it is absent.
+function deliveryDir(): string {
+  return process.env.MAKEFUN_OUTPUT_DIR ?? DEFAULT_OUTPUT;
+}
+
+function deliverGame(root: string, dest: string): void {
+  makeDir(dest, { recursive: true });
+  copyTree(joinPath(root, 'game'), joinPath(dest, 'game'), { recursive: true });
+}
+
+function deliverShots(root: string, dest: string): void {
+  const shotsDest = joinPath(dest, 'screenshots');
+  makeDir(shotsDest, { recursive: true });
+  const shotsSrc = joinPath(root, 'screenshots');
+  if (pathExists(shotsSrc)) {
+    copyTree(shotsSrc, shotsDest, { recursive: true });
+  }
+}
+
+function deliverDossier(dest: string): void {
+  const limits = {
+    text_max_bytes: TEXT_BUDGET,
+    screenshots: { max: SHOT_LIMIT, max_bytes: SHOT_BUDGET },
+    game_max_files: GAME_FILE_LIMIT,
+    game_max_bytes: GAME_BYTE_LIMIT,
+    game_path_max_bytes: GAME_PATH_LIMIT,
+  };
+  writeText(joinPath(dest, 'dossier.json'), makeDossier(dest, limits));
+}
+
+function handInCrumb(): void {
+  const root = repoRoot();
+  const dest = deliveryDir();
+  deliverGame(root, dest);
+  deliverShots(root, dest);
+  deliverDossier(dest);
+  console.log(`CRUMB handed in: night-kitchen game + 4 screenshots copied to ${dest}; dossier.json written.`);
+}
+
+handInCrumb();
